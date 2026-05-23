@@ -9,6 +9,27 @@ const base = {
     module: {
         rules: [
             {
+                test: /\.tsx?$/,
+                use: [
+                    {
+                        loader: 'babel-loader',
+                        options: {
+                            babelrc: false,
+                            presets: ['@babel/preset-env', '@babel/preset-react']
+                        }
+                    },
+                    {
+                        loader: 'ts-loader',
+                        options: {
+                            transpileOnly: true
+                        }
+                    }
+                ],
+                exclude: [
+                    /node_modules/
+                ]
+            },
+            {
                 test: /\.jsx?$/,
                 loader: 'babel-loader',
                 options: {
@@ -91,6 +112,7 @@ module.exports = [
             })
         ],
         resolve: {
+            extensions: ['.js', '.jsx', '.ts', '.tsx'],
             symlinks: false,
             alias: {
                 react: path.resolve(__dirname, 'node_modules/react'),
@@ -109,6 +131,7 @@ module.exports = [
         },
         entry: './src-renderer-webpack/editor/addons/index.jsx',
         resolve: {
+            extensions: ['.js', '.jsx', '.ts', '.tsx'],
             symlinks: false,
             alias: {
                 react: path.resolve(__dirname, 'node_modules/react'),
