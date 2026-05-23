@@ -25,6 +25,14 @@ const base = {
                         }
                     }
                 ],
+                include: [
+                    path.resolve(__dirname, 'src'),
+                    /node_modules[\\/]scratch-[^\\/]+[\\/]src/,
+                    /node_modules[\\/]pify/,
+                    /node_modules[\\/]@vernier[\\/]godirect/,
+                    /node_modules[\\/]@chenglou[\\/]pretext/,
+                    /node_modules[\\/]isomorphic-git/
+                ],
                 exclude: [
                     /node_modules/
                 ]
