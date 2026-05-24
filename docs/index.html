@@ -248,6 +248,10 @@
       border: 1px solid black;
     }
 
+    .store-badge:hover {
+      cursor: pointer;
+    }
+
     .store-badge:active {
       box-shadow: 0 0 8px rgba(255, 255, 255, 0.6) inset;
     }
@@ -272,6 +276,14 @@
 
     .apple-icon {
       background-image: url(apple.svg);
+    }
+
+    .github-icon {
+      background-image: url(github.svg);
+    }
+
+    .r2-icon {
+      background-image: url(R2.svg);
     }
 
     .store-badge>div> :first-child {
@@ -564,6 +576,84 @@
     [hidden] {
       display: none !important;
     }
+
+    .download-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .download-modal {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .download-modal h3 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .download-modal-buttons {
+      display: flex;
+      flex-direction: row;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+
+    .download-modal-cancel {
+      margin-top: 12px;
+      text-align: center;
+    }
+
+    .download-modal-hint {
+      text-align: center;
+      font-size: 0.85em;
+      color: #666;
+      margin: 12px 0 0 0;
+    }
+
+    .download-modal-cancel button {
+      background: none;
+      border: none;
+      color: #666;
+      cursor: pointer;
+    }
+
+    .download-modal-cancel button:hover {
+      color: #333;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .download-modal {
+        background: #1e1e1e;
+        color: #eee;
+      }
+
+      .download-modal-cancel button {
+        color: #aaa;
+      }
+
+      .download-modal-cancel button:hover {
+        color: #ddd;
+      }
+
+      .download-modal-hint {
+        color: #aaa;
+      }
+    }
   </style>
 </head>
 
@@ -727,9 +817,29 @@
     };
     const language = getLanguage();
     const messages = parseTranslations(language);
+    if (language === 'zh-cn') {
+      messages['select-download-source'] = '选择下载源';
+      messages['cancel'] = '取消';
+      messages['download-hint'] = '建议中国大陆用户使用 R2 下载';
+    }
     document.documentElement.lang = language;
     languageSelector.value = language;
     languageText.textContent = localeNames[language] || language;
+
+    let currentDownloadUrl = null;
+    let currentR2Url = null;
+
+    const showDownloadModal = (githubUrl, r2Url) => {
+      currentDownloadUrl = githubUrl;
+      currentR2Url = r2Url;
+      const modal = document.getElementById('download-modal');
+      modal.removeAttribute('hidden');
+    };
+
+    const hideDownloadModal = () => {
+      const modal = document.getElementById('download-modal');
+      modal.setAttribute('hidden', '');
+    };
 
     const handleElementWasCompleted = (element) => {
       // Can't translate an element until its children finish, otherwise what we put can be overwritten or appended to
@@ -751,7 +861,23 @@
 
       const asset = element.getAttribute('data-asset');
       if (asset) {
-        element.href = `${element.href}/download/v${VERSION}/${asset.replace(/{version}/g, VERSION)}`;
+        const githubUrl = `${element.href}/download/v${VERSION}/${asset.replace(/{version}/g, VERSION)}`;
+        element.href = 'javascript:void(0)';
+        element.style.cursor = 'pointer';
+
+        const r2Asset = element.getAttribute('data-r2');
+        if (r2Asset !== null) {
+          const r2Url = `https://desktop.r2.bilup.org/${asset.replace(/{version}/g, VERSION)}`;
+          element.addEventListener('click', (e) => {
+            e.preventDefault();
+            showDownloadModal(githubUrl, r2Url);
+          });
+        } else {
+          element.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.location.href = githubUrl;
+          });
+        }
       }
 
       const version = element.getAttribute('data-version');
@@ -783,6 +909,46 @@
         document.body.appendChild(changelogElement);
         changelogElement.style.display = 'block';
       }
+
+      const githubBtn = document.getElementById('download-github');
+      const r2Btn = document.getElementById('download-r2');
+      const cancelBtn = document.getElementById('download-cancel');
+      const modalOverlay = document.getElementById('download-modal');
+
+      for (const element of modalOverlay.querySelectorAll('[l10n]')) {
+        const l10n = element.getAttribute('l10n');
+        const message = messages[l10n];
+        if (message) {
+          element.textContent = message;
+        }
+      }
+
+      githubBtn.addEventListener('click', () => {
+        if (currentDownloadUrl) {
+          window.location.href = currentDownloadUrl;
+          hideDownloadModal();
+        }
+      });
+
+      r2Btn.addEventListener('click', () => {
+        if (currentR2Url) {
+          window.location.href = currentR2Url;
+          hideDownloadModal();
+        }
+      });
+
+      cancelBtn.addEventListener('click', hideDownloadModal);
+      modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) {
+          hideDownloadModal();
+        }
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          hideDownloadModal();
+        }
+      });
     });
 
     document.addEventListener('click', (e) => {
@@ -817,22 +983,22 @@
 
     <div data-if-os="windows-modern">
       <a class="store-badge microsoft-store" href="https://apps.microsoft.com/detail/9pbcgh64l0v5">
-          <div class="store-icon microsoft-icon"></div>
-          <div class="store-badge-text">
-            <div l10n="getit" l10n-description="Used in the context 'Get it from Microsoft'. Microsoft is on a separate line (above in Japanese, below in others)">Get it from</div>
-            <div>Microsoft</div>
-          </div>
-        </a>
+        <div class="store-icon microsoft-icon"></div>
+        <div class="store-badge-text">
+          <div l10n="getit" l10n-description="Used in the context 'Get it from Microsoft'. Microsoft is on a separate line (above in Japanese, below in others)">Get it from</div>
+          <div>Microsoft</div>
+        </div>
+      </a>
       <p class="download-separator" l10n="or" l10n-description="Appears between two different download buttons">or</p>
       <a class="download-button" href="https://github.com/Bilup/desktop/releases"
-        data-asset="Bilup-Setup-{version}-x64.exe" l10n="win-modern-download">Download installer for Windows 10+
+        data-asset="Bilup-Setup-{version}-x64.exe" data-r2="" l10n="win-modern-download">Download installer for Windows 10+
         (64-bit)</a>
       <!-- <p lang="en">Free code signing provided by <a href="https://about.signpath.io/">SignPath.io</a>, certificate by <a href="https://signpath.org/">SignPath Foundation</a>.</p> -->
     </div>
 
     <div data-if-os="windows-legacy">
       <a class="download-button" href="https://github.com/Bilup/desktop/releases"
-        data-asset="Bilup-Legacy-Setup-{version}-x64.exe" l10n="win-legacy-download">Download installer for Windows
+        data-asset="Bilup-Legacy-Setup-{version}-x64.exe" data-r2="" l10n="win-legacy-download">Download installer for Windows
         7, 8, 8.1 (64-bit)</a>
       <p l10n="smartscreen">If a Windows SmartScreen alert appears, click "More info" then "Run anyways".</p>
     </div>
@@ -849,7 +1015,7 @@
       </a> -->
       <!-- <p class="download-separator" l10n="or" l10n-description="Appears between two different download buttons">or</p> -->
       <a class="download-button" href="https://github.com/Bilup/desktop/releases"
-        data-asset="Bilup-Setup-{version}.dmg" l10n="mac-modern-download">Download for macOS 12 and later</a>
+        data-asset="Bilup-Setup-{version}.dmg" data-r2="" l10n="mac-modern-download">Download for macOS 12 and later</a>
       <p class="download-separator" l10n="or" l10n-description="Appears between two different download buttons">or</p>
       <p>
         <a l10n="mac-legacy-link" href="#mac-legacy">
@@ -973,12 +1139,12 @@
     <p l10n="win-modern2">Or download an installer.</p>
     <ul class="download-list">
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-Setup-{version}-x64.exe" l10n="w642">Download installer (64-bit, recommended)</a></li>
+          data-asset="Bilup-Setup-{version}-x64.exe" data-r2="" l10n="w642">Download installer (64-bit, recommended)</a></li>
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-Setup-{version}-ia32.exe" l10n="w323"
+          data-asset="Bilup-Setup-{version}-ia32.exe" data-r2="" l10n="w323"
           l10n-description="Alternative download button">32-bit</a></li>
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-Setup-{version}-arm64.exe">ARM</a></li>
+          data-asset="Bilup-Setup-{version}-arm64.exe" data-r2="">ARM</a></li>
     </ul>
 
     <!-- <p lang="en">Bilup Desktop uses a free code signing provided by <a href="https://about.signpath.io/">SignPath.io</a>, certificate by <a href="https://signpath.org/">SignPath Foundation</a>.</p> -->
@@ -991,10 +1157,10 @@
       anyways".</p>
     <ul class="download-list">
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-Legacy-Setup-{version}-x64.exe" l10n="win-legacy-64">Download legacy installer (64-bit,
+          data-asset="Bilup-Legacy-Setup-{version}-x64.exe" data-r2="" l10n="win-legacy-64">Download legacy installer (64-bit,
           recommended)</a></li>
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-Legacy-Setup-{version}-ia32.exe" l10n="w323"
+          data-asset="Bilup-Legacy-Setup-{version}-ia32.exe" data-r2="" l10n="w323"
           l10n-description="Alternative download button">32-bit</a></li>
     </ul>
   </div>
@@ -1014,7 +1180,7 @@
     <p l10n="macmanual-without-or">Download the app manually. Open the .DMG, then drag Bilup into Applications. If it tells
       you that Bilup already exists, choose "Replace".</p>
     <a class="download-button" href="https://github.com/Bilup/desktop/releases"
-      data-asset="Bilup-Setup-{version}.dmg" l10n="mac-modern-download">Download for macOS 12 and later</a>
+      data-asset="Bilup-Setup-{version}.dmg" data-r2="" l10n="mac-modern-download">Download for macOS 12 and later</a>
   </div>
 
   <div class="manual-installation section" id="mac-legacy">
@@ -1025,13 +1191,13 @@
 
     <ul class="download-list">
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-Legacy-11-Setup-{version}.dmg">macOS 11</a></li>
+          data-asset="Bilup-Legacy-11-Setup-{version}.dmg" data-r2="">macOS 11</a></li>
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-Legacy-10.15-Setup-{version}.dmg">macOS 10.15</a></li>
+          data-asset="Bilup-Legacy-10.15-Setup-{version}.dmg" data-r2="">macOS 10.15</a></li>
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-Legacy-10.13-10.14-Setup-{version}.dmg">macOS 10.14</a></li>
+          data-asset="Bilup-Legacy-10.13-10.14-Setup-{version}.dmg" data-r2="">macOS 10.14</a></li>
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-Legacy-10.13-10.14-Setup-{version}.dmg">macOS 10.13</a></li>
+          data-asset="Bilup-Legacy-10.13-10.14-Setup-{version}.dmg" data-r2="">macOS 10.13</a></li>
     </ul>
   </div>
 
@@ -1064,11 +1230,11 @@
       apt repository):</p>
     <ul class="download-list">
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-linux-amd64-{version}.deb">x86 64-bit</a></li>
+          data-asset="Bilup-linux-amd64-{version}.deb" data-r2="">x86 64-bit</a></li>
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-linux-arm64-{version}.deb">ARM 64-bit</a></li>
+          data-asset="Bilup-linux-arm64-{version}.deb" data-r2="">ARM 64-bit</a></li>
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-linux-armv7l-{version}.deb">ARMv7l</a></li>
+          data-asset="Bilup-linux-armv7l-{version}.deb" data-r2="">ARMv7l</a></li>
     </ul>
 
     <!-- <h3>Arch User Repository</h3>
@@ -1107,21 +1273,21 @@
     <h3>AppImage</h3>
     <ul class="download-list">
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-linux-x86_64-{version}.AppImage">x86 64-bit</a></li>
+          data-asset="Bilup-linux-x86_64-{version}.AppImage" data-r2="">x86 64-bit</a></li>
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-linux-arm64-{version}.AppImage">ARM 64-bit</a></li>
+          data-asset="Bilup-linux-arm64-{version}.AppImage" data-r2="">ARM 64-bit</a></li>
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-linux-armv7l-{version}.AppImage">ARMv7l</a></li>
+          data-asset="Bilup-linux-armv7l-{version}.AppImage" data-r2="">ARMv7l</a></li>
     </ul>
 
     <h3>tar.gz</h3>
     <ul class="download-list">
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-linux-x64-{version}.tar.gz">x86 64-bit</a></li>
+          data-asset="Bilup-linux-x64-{version}.tar.gz" data-r2="">x86 64-bit</a></li>
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-linux-arm64-{version}.tar.gz">ARM 64-bit</a></li>
+          data-asset="Bilup-linux-arm64-{version}.tar.gz" data-r2="">ARM 64-bit</a></li>
       <li><a class="download-button" href="https://github.com/Bilup/desktop/releases"
-          data-asset="Bilup-linux-armv7l-{version}.tar.gz">ARMv7l</a></li>
+          data-asset="Bilup-linux-armv7l-{version}.tar.gz" data-r2="">ARMv7l</a></li>
     </ul>
   </div>
 
@@ -1152,6 +1318,31 @@
       }).click();
     };
   </script>
+  <div id="download-modal" class="download-modal-overlay" hidden>
+    <div class="download-modal">
+      <h3 l10n="select-download-source">Select download source</h3>
+      <div class="download-modal-buttons">
+        <button class="store-badge" id="download-github">
+          <div class="store-icon github-icon"></div>
+          <div class="store-badge-text">
+            <div l10n="getit" l10n-description="Used in the context 'Get it from Microsoft'. Microsoft is on a separate line (above in Japanese, below in others)">Get it from</div>
+            <div>GitHub</div>
+          </div>
+        </button>
+        <button class="store-badge" id="download-r2">
+          <div class="store-icon r2-icon"></div>
+          <div class="store-badge-text">
+            <div l10n="getit" l10n-description="Used in the context 'Get it from Microsoft'. Microsoft is on a separate line (above in Japanese, below in others)">Get it from</div>
+            <div>R2</div>
+          </div>
+        </button>
+      </div>
+      <p class="download-modal-hint" l10n="download-hint">Chinese mainland users recommended to use R2</p>
+      <div class="download-modal-cancel">
+        <button id="download-cancel" l10n="cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>
