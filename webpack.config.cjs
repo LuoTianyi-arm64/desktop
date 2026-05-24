@@ -26,17 +26,20 @@ const base = {
                         }
                     }
                 ],
-                include: [
-                    path.resolve(__dirname, 'src'),
-                    /node_modules[\\/]scratch-[^\\/]+[\\/]src/,
-                    /node_modules[\\/]pify/,
-                    /node_modules[\\/]@vernier[\\/]godirect/,
-                    /node_modules[\\/]@chenglou[\\/]pretext/,
-                    /node_modules[\\/]isomorphic-git/
-                ],
-                exclude: [
-                    /node_modules/
-                ]
+                include: (filePath) => {
+                    const normalizedPath = filePath.toLowerCase();
+                    if (normalizedPath.includes('node_modules')) {
+                        if (normalizedPath.includes('scratch-gui') ||
+                            normalizedPath.includes('pify') ||
+                            normalizedPath.includes('@vernier') ||
+                            normalizedPath.includes('@chenglou') ||
+                            normalizedPath.includes('isomorphic-git')) {
+                            return true;
+                        }
+                        return false;
+                    }
+                    return true;
+                }
             },
             {
                 test: /\.jsx?$/,
