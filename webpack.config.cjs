@@ -84,6 +84,38 @@ const base = {
                         }
                     }
                 ]
+            },
+            {
+                test: /\.less$/,
+                use: [
+                    {
+                        loader: 'style-loader'
+                    },
+                    {
+                        loader: 'css-loader',
+                        options: {
+                            modules: true,
+                            importLoaders: 2,
+                            localIdentName: '[name]_[local]_[hash:base64:5]',
+                            camelCase: true
+                        }
+                    },
+                    {
+                        loader: 'postcss-loader',
+                        options: {
+                            postcssOptions: {
+                                plugins: [
+                                    'postcss-import',
+                                    'postcss-simple-vars',
+                                    'autoprefixer'
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        loader: 'less-loader'
+                    }
+                ]
             }
         ]
     }
