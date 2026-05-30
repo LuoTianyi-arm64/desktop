@@ -88,6 +88,7 @@
       "dist-renderer-webpack/**/*",
       "dist-library-files/**/*",
       "dist-extensions/**/*",
+      "dist-bilup-extensions/**/*",
       "penguinmod/**/*"
     ],
     "extraResources": [
