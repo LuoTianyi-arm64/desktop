@@ -24,7 +24,7 @@ jobs:
         run: yarn install --ignore-engines
 
       - name: Run download script
-        run: node scripts/download-library-files.mjs
+        run: node scripts/download-library-files.mjs --no-br
 
       - name: Show generated files
         run: ls -R dist-library-files

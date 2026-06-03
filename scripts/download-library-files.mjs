@@ -12,6 +12,7 @@ import { computeMD5, computeSHA256, persistentFetch } from './lib.mjs';
  */
 
 const outDirectory = pathUtil.join(import.meta.dirname, '../dist-library-files');
+const noBrotli = process.argv.includes('--no-br');
 
 /**
  * @param {AssetMetadata[]} remainingAssets List of remaining assets. Modified in-place.
@@ -21,12 +22,12 @@ const startDownloading = async (remainingAssets) => {
     const asset = remainingAssets.shift();
 
     const extension = pathUtil.extname(asset.src);
-    const assetPath = pathUtil.join(outDirectory, `${asset.md5}${extension}.br`);
+    const assetPath = pathUtil.join(outDirectory, `${asset.md5}${extension}${noBrotli ? '' : '.br'}`);
 
     try {
-      const compressedData = await fsPromises.readFile(assetPath);
-      const decompressedData = await new Promise((resolve, reject) => {
-        brotliDecompress(compressedData, (err, res) => {
+      const fileData = await fsPromises.readFile(assetPath);
+      const dataToVerify = noBrotli ? fileData : await new Promise((resolve, reject) => {
+        brotliDecompress(fileData, (err, res) => {
           if (err) {
             reject(err);
           } else {
@@ -35,8 +36,8 @@ const startDownloading = async (remainingAssets) => {
         });
       });
 
-      const actualMD5 = computeMD5(decompressedData);
-      const actualSHA256 = computeSHA256(decompressedData);
+      const actualMD5 = computeMD5(dataToVerify);
+      const actualSHA256 = computeSHA256(dataToVerify);
       if (actualMD5 !== asset.md5) {
         throw new Error(`MD5 mismatch. Expected ${asset.md5} got ${actualMD5}`);
       }
@@ -65,7 +66,7 @@ const startDownloading = async (remainingAssets) => {
       throw new Error(`SHA256 mismatch. Expected ${asset.sha256} got ${actualSHA256}`);
     }
 
-    const compressedData = await new Promise((resolve, reject) => {
+    const dataToWrite = noBrotli ? Buffer.from(data) : await new Promise((resolve, reject) => {
       brotliCompress(data, (err, res) => {
         if (err) {
           reject(err);
@@ -75,7 +76,7 @@ const startDownloading = async (remainingAssets) => {
       });
     });
 
-    await fsPromises.writeFile(assetPath, compressedData);
+    await fsPromises.writeFile(assetPath, dataToWrite);
   }
 };
 
