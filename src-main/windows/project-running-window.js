@@ -67,7 +67,7 @@ class ProjectRunningWindow extends AbtractWindow {
 
     const parsed = new URL(details.url);
 
-    if (parsed.origin === 'https://cdn.assets.scratch.mit.edu' || parsed.origin === 'https://assets.scratch.mit.edu') {
+    if (parsed.origin === 'https://cdn.assets.scratch.mit.edu' || parsed.origin === 'https://assets.scratch.mit.edu' || parsed.origin === 'https://assets.r2.bilup.org') {
       const match = parsed.href.match(/[0-9a-f]{32}\.\w{3}/i);
       if (match) {
         const md5ext = match[0];
