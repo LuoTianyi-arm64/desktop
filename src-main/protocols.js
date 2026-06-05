@@ -116,9 +116,11 @@ protocol.registerSchemesAsPrivileged(Object.entries(FILE_SCHEMES).map(([scheme, 
   scheme,
   privileges: {
     standard: !!metadata.standard,
-    supportFetchAPI: !!metadata.supportFetch,
+    supportFetchAPI: true,
     secure: !!metadata.secure,
-    stream: !!metadata.stream
+    stream: !!metadata.stream,
+    corsEnabled: true,
+    bypassCSP: true
   }
 })));
 
