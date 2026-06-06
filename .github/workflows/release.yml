@@ -187,7 +187,7 @@ jobs:
           name: windows-${{ matrix.target }}
           path: D:\repo\dist\${{ matrix.files }}
           retention-days: 1
-publish:
+  publish:
     needs: [package-linux, package-mac, package-windows]
     runs-on: ubuntu-latest
     steps:
