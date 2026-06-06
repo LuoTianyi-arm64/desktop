@@ -111,9 +111,13 @@ const buildSPOfflineFiles = async () => {
     console.log(
       `${createFetchLogPrefix('SharkPools', 'required', requiredIndex, requiredTotal)} Fetching ${file}`
     );
-    const data = await fetchSPFile(file, true);
-    await writeRaw(outputDirectory, file, data);
-    requiredCount++;
+    try {
+      const data = await fetchSPFile(file, true);
+      await writeRaw(outputDirectory, file, data);
+      requiredCount++;
+    } catch (error) {
+      console.warn(`${createFetchLogPrefix('SharkPools', 'required', requiredIndex, requiredTotal)} Failed to fetch ${file}:`, error.message);
+    }
   }
 
   // 下载可选文件

@@ -155,9 +155,13 @@ const buildMWOfflineFiles = async () => {
     console.log(
       `${createFetchLogPrefix('Mistium', 'required', requiredIndex, requiredTotal)} Fetching ${file}`
     );
-    const data = await fetchMWFile(file, true);
-    await writeRaw(outputDirectory, file, data);
-    requiredCount++;
+    try {
+      const data = await fetchMWFile(file, true);
+      await writeRaw(outputDirectory, file, data);
+      requiredCount++;
+    } catch (error) {
+      console.warn(`${createFetchLogPrefix('Mistium', 'required', requiredIndex, requiredTotal)} Failed to fetch ${file}:`, error.message);
+    }
   }
 
   let optionalIndex = 0;

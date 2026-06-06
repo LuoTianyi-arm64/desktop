@@ -278,9 +278,13 @@ const buildAstraOfflineFiles = async () => {
     console.log(
       `${createFetchLogPrefix('Astra', 'required', requiredIndex, requiredTotal)} Fetching ${file}`
     );
-    const data = await fetchAstraFile(file, true);
-    await writeRaw(astraOutputDirectory, file, data);
-    requiredCount++;
+    try {
+      const data = await fetchAstraFile(file, true);
+      await writeRaw(astraOutputDirectory, file, data);
+      requiredCount++;
+    } catch (error) {
+      console.warn(`${createFetchLogPrefix('Astra', 'required', requiredIndex, requiredTotal)} Failed to fetch ${file}:`, error.message);
+    }
   }
 
   let optionalIndex = 0;
