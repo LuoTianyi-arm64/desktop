@@ -1,253 +1,213 @@
 name: Release
-
 on:
   push:
     tags:
-    - 'v*'
-
+      - 'v*'
 permissions:
-  # required to modify releases
   contents: write
-
+env:
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 jobs:
-  release-linux:
+  build:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-        persist-credentials: false
-        token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Install strip-nondeterminism
-      run: sudo apt-get install strip-nondeterminism
-    - name: Install Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 24
-    - name: Install Yarn
-      run: npm install -g yarn
-    - name: Install dependencies
-      run: yarn install --ignore-engines --ignore-scripts
-    - name: Fetch
-      run: yarn run fetch
-    - name: Compile
-      run: yarn run webpack:prod
-    - name: Package
-      run: |
-        node release-automation/build.mjs --debian --tarball --appimage --x64 --armv7l --arm64 --production
-    - name: Print file tree
-      run: node scripts/print-file-tree.mjs dist
-    - name: Upload artifacts to GitHub Actions
-      uses: actions/upload-artifact@v4
-      with:
-        name: linux
-        path: |
-          dist/*.deb
-          dist/*.tar.gz
-          dist/*.AppImage
-    - name: Upload package-lock.json
-      uses: actions/upload-artifact@v4
-      with:
-        name: package-lock-release-linux
-        path: package-lock.json
-    - name: Upload artifacts to tag
-      run: |
-        node scripts/upload-to-github-releases.mjs Bilup desktop "dist/*.deb"
-        node scripts/upload-to-github-releases.mjs Bilup desktop "dist/*.tar.gz"
-        node scripts/upload-to-github-releases.mjs Bilup desktop "dist/*.AppImage"
-      env:
-        GH_TOKEN: "${{ github.token }}"
-
-    - name: Upload package-lock.json
-      uses: actions/upload-artifact@v4
-      with:
-        name: package-lock-release-windows
-        path: D:\repo\package-lock.json
-
-  release-mac:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Yarn
+        run: npm install -g yarn
+      - name: Install dependencies
+        run: yarn install --ignore-engines --ignore-scripts
+      - name: Fetch
+        run: yarn run fetch
+      - name: Compile
+        run: yarn run webpack:prod
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            dist-extensions/
+            dist-library-files/
+            dist-renderer-webpack/
+            src-renderer/packager/
+            dist-bilup-extensions/
+  package-linux:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        format: [debian, tarball, appimage, pacman, rpm]
+        arch: [x64, armv7l, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Yarn
+        run: npm install -g yarn
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y strip-nondeterminism fakeroot ruby ruby-dev rubygems libarchive-tools rpm
+          sudo gem install --no-document fpm
+      - name: Install dependencies
+        run: yarn install --ignore-engines --ignore-scripts
+      - name: Package
+        run: |
+          node release-automation/build.mjs \
+            --${{ matrix.format }} \
+            --${{ matrix.arch }} \
+            --production
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.format }}-${{ matrix.arch }}
+          path: dist/*
+  package-mac:
+    needs: build
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: modern
+            args: '--mac --universal'
+          - target: legacy-10.13-10.14
+            args: '--mac-legacy-10.13-10.14 --x64'
+          - target: legacy-10.15
+            args: '--mac-legacy-10.15 --x64'
+          - target: legacy-11
+            args: '--mac-legacy-11 --universal'
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-        persist-credentials: false
-    - name: Install Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 24
-    - name: Install Yarn
-      run: npm install -g yarn
-    - name: Install dependencies
-      run: yarn install --ignore-engines --ignore-scripts
-    - name: Fetch
-      run: yarn run fetch
-    - name: Compile
-      run: yarn run webpack:prod
-    - name: Package
-      run: |
-        if [ "${SIGN_MACOS}" = "true" ]; then
-          # I don't trust GitHub Actions to not accidentally log shell substitutions somewhere, so we
-          # use Python instead of "echo $SECRET >" to write the private key to a file as needed by notarytool.
-          python3 -c "import os; open(os.getenv('APPLE_API_KEY_NAME'), 'w').write(os.getenv('APPLE_API_KEY_DATA'))" >/dev/null 2>&1
-          # @electron/notaraize documentation says key should be an absolute path
-          export APPLE_API_KEY="$(pwd)/$APPLE_API_KEY_NAME"
-
-          # Need to run the universal builds as separate commands or it breaks when @electron/universal
-          # diffs the ASARs and finds spurious differences. Not clear why.
-          node release-automation/build.mjs --mac --universal --production
-          node release-automation/build.mjs --mac-legacy-11 --universal --production
-          # These macOS versions never ran on an Apple Silicon device, so only need x64
-          node release-automation/build.mjs --mac-legacy-10.13-10.14 --mac-legacy-10.15 --x64 --production
-
-          # for safety
-          rm "$APPLE_API_KEY_NAME"
-        else
-          echo "macOS signing/notarization secrets not set; building unsigned artifacts."
-          # Ensure electron-builder doesn't attempt to use a missing certificate.
-          export CSC_IDENTITY_AUTO_DISCOVERY=false
-          unset APPLE_API_ISSUER APPLE_API_KEY_ID APPLE_API_KEY_NAME APPLE_API_KEY_DATA APPLE_API_KEY CSC_LINK CSC_KEY_PASSWORD
-
-          node release-automation/build.mjs --mac --universal --production
-          node release-automation/build.mjs --mac-legacy-11 --universal --production
-          node release-automation/build.mjs --mac-legacy-10.13-10.14 --mac-legacy-10.15 --x64 --production
-        fi
-      env:
-        SIGN_MACOS: ${{ secrets.APPLE_API_KEY_DATA != '' && secrets.APPLE_API_KEY_NAME != '' && secrets.APPLE_API_KEY_ID != '' && secrets.APPLE_API_ISSUER != '' && secrets.APPLE_CSC_LINK != '' && secrets.APPLE_CSC_KEY_PASSWORD != '' }}
-        APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-        APPLE_API_KEY_NAME: ${{ secrets.APPLE_API_KEY_NAME }}
-        APPLE_API_KEY_DATA: ${{ secrets.APPLE_API_KEY_DATA }}
-        # base64 -i Certificates.p12
-        CSC_LINK: ${{ secrets.APPLE_CSC_LINK }}
-        # electron-builder documentation says password won't be escaped, so don't use any
-        # special characters that the shell will mess with
-        CSC_KEY_PASSWORD: ${{ secrets.APPLE_CSC_KEY_PASSWORD }}
-    - name: Print file tree
-      run: node scripts/print-file-tree.mjs dist
-    - name: Upload artifacts to GitHub Actions
-      uses: actions/upload-artifact@v4
-      with:
-        name: mac
-        path: dist/*.dmg
-    - name: Upload package-lock.json
-      uses: actions/upload-artifact@v4
-      with:
-        name: package-lock-release-mac
-        path: package-lock.json
-    - name: Upload artifacts to tag
-      run: |
-        node scripts/upload-to-github-releases.mjs Bilup desktop "dist/*.dmg"
-      env:
-        GH_TOKEN: "${{ github.token }}"
-
-  release-windows:
-    # GitHub's Windows runners have a C: drive and a D: drive.
-    # C: is for the OS and has good read performance but awful write performance.
-    # D: has much better faster write performance (>20x faster than C:)
-    # We want to use the D: drive whenever we can. Trying to do "npm i" on the C:
-    # drive has been observed to take over an hour!
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Yarn
+        run: npm install -g yarn
+      - name: Install dependencies
+        run: yarn install --ignore-engines --ignore-scripts
+      - name: Package
+        run: node release-automation/build.mjs ${{ matrix.args }} --production
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-${{ matrix.target }}
+          path: dist/*.dmg
+  package-windows:
+    needs: build
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - target: modern-nsis-x64
+            args: '--windows --x64'
+            files: '*.exe'
+          - target: modern-nsis-ia32
+            args: '--windows --ia32'
+            files: '*.exe'
+          - target: modern-nsis-arm64
+            args: '--windows --arm64'
+            files: '*.exe'
+          - target: modern-appx-x64
+            args: '--microsoft-store --x64'
+            files: '*.appx'
+          - target: modern-appx-ia32
+            args: '--microsoft-store --ia32'
+            files: '*.appx'
+          - target: modern-appx-arm64
+            args: '--microsoft-store --arm64'
+            files: '*.appx'
+          - target: portable
+            args: '--windows-portable --x64'
+            files: '*.exe'
+          - target: legacy-x64
+            args: '--windows-legacy --x64'
+            files: '*.exe'
+          - target: legacy-ia32
+            args: '--windows-legacy --ia32'
+            files: '*.exe'
     env:
-      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
     steps:
-    # actions/checkout can only clone to paths in $GITHUB_WORKSPACE which is on the C: drive,
-    # so we have to clone to C: then copy to D: after. This repository itself isn't huge so
-    # this is plenty fast.
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-        persist-credentials: false
-        path: repo
-    - name: "Move repository to D: drive"
-      run: |
-        Copy-Item -Path repo -Destination D:\repo -Recurse
-        Remove-Item -Path repo -Recurse -Force
-    - name: Install Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 24
-    - name: Install Yarn
-      run: npm install -g yarn
-
-    - name: Install dependencies
-      working-directory: D:\repo
-      run: yarn install --ignore-engines --ignore-scripts
-    - name: Fetch
-      working-directory: D:\repo
-      run: yarn run fetch
-    - name: Compile
-      working-directory: D:\repo
-      run: yarn run webpack:prod
-    - name: Package
-      working-directory: D:\repo
-      run: |
-        node release-automation/build.mjs --windows --microsoft-store --x64 --ia32 --arm64 --production
-        node release-automation/build.mjs --windows-portable --x64 --production
-        node release-automation/build.mjs --windows-legacy --ia32 --x64 --production
-    - name: Print file tree
-      working-directory: D:\repo
-      run: node scripts/print-file-tree.mjs dist
-    - name: Upload unsigned artifacts to GitHub Actions
-      uses: actions/upload-artifact@v4
-      with:
-        name: windows-unsigned
-        path: D:\repo\dist\*.exe
-    - name: Upload Microsoft Store artifact to GitHub Actions
-      uses: actions/upload-artifact@v4
-      with:
-        name: appx
-        path: D:\repo\dist\*.appx
-    - name: Upload unsigned artifacts for SignPath
-      uses: actions/upload-artifact@v4
-      id: signpath-unsigned
-      if: env.SIGNPATH_API_TOKEN != ''
-      with:
-        name: artifact-for-signpath
-        # keep this list in sync with the signed artifiact upload below
-        path: |
-          D:\repo\dist\Bilup-Setup*x64.exe
-    - name: Sign executables with SignPath
-      uses: signpath/github-action-submit-signing-request@4f13d373e8f0cd8d3c0465ff4877feff27aed2ae
-      if: env.SIGNPATH_API_TOKEN != ''
-      with:
-        api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-        organization-id: 04444052-261e-46eb-8168-ed0eee93c57c
-        project-slug: desktop_
-        signing-policy-slug: release-signing
-        github-artifact-id: ${{ steps.signpath-unsigned.outputs.artifact-id }}
-        artifact-configuration-slug: sign_installers
-        wait-for-completion: true
-        # overwrite the unsigned files
-        output-artifact-directory: D:\repo\dist
-    - name: Upload signed artifacts to GitHub Actions
-      uses: actions/upload-artifact@v4
-      if: env.SIGNPATH_API_TOKEN != ''
-      with:
-        name: windows-signed
-        # keep this list in sync with the signpath artifact upload above
-        path: |
-          D:\repo\dist\Bilup-Setup*x64.exe
-    - name: Upload signed artifacts to tag
-      working-directory: D:\repo
-      if: env.SIGNPATH_API_TOKEN != ''
-      run: |
-        node scripts/upload-to-github-releases.mjs Bilup desktop "dist/*.exe"
-      env:
-        GH_TOKEN: "${{ github.token }}"
-
-    - name: Upload unsigned artifacts to tag (no SignPath)
-      working-directory: D:\repo
-      if: env.SIGNPATH_API_TOKEN == ''
-      run: |
-        node scripts/upload-to-github-releases.mjs Bilup desktop "dist/*.exe"
-      env:
-        GH_TOKEN: "${{ github.token }}"
-    - name: Upload package-lock.json
-      uses: actions/upload-artifact@v4
-      with:
-        name: package-lock-release-windows
-        path: D:\repo\package-lock.json
- 
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+          path: repo
+      - name: Move to D drive
+        shell: pwsh
+        run: |
+          Copy-Item -Path repo -Destination D:\repo -Recurse
+          Remove-Item -Path repo -Recurse -Force
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: D:\repo\
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Yarn
+        run: npm install -g yarn
+      - name: Configure yarn cache
+        shell: pwsh
+        run: |
+          yarn config set cache-folder D:\yarn-cache
+      - name: Install dependencies
+        working-directory: D:\repo
+        run: |
+          yarn install --ignore-engines --ignore-scripts
+      - name: Package
+        working-directory: D:\repo
+        run: |
+          node release-automation/build.mjs ${{ matrix.args }} --production
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.target }}
+          path: D:\repo\dist\${{ matrix.files }}
+          retention-days: 1
+publish:
+    needs: [package-linux, package-mac, package-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Download all packages
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Upload to GitHub Releases
+        shell: bash
+        run: |
+          node scripts/upload-to-github-releases.mjs \
+            "${{ github.repository_owner }}" \
+            "${{ github.event.repository.name }}" \
+            "artifacts/*.{exe,dmg,deb,zip,tar.gz,AppImage,snap,rpm,zst,appx}"
+        env:
+          GH_TOKEN: "${{ github.token }}"
