@@ -19,7 +19,7 @@ jobs:
         options=(!strip !debug)
         pkgname=bilup-bin
         provides=('bilup')
-        conflicts=('bilup','bilup-git')
+        conflicts=('bilup' 'bilup-git')
         pkgver=${VERSION}
         pkgrel=1
         pkgdesc='TurboWarp mod with Chinese translations and live collaboration.'
